@@ -3,4 +3,3 @@ sec-api
 pandas
 python-dateutil
 yfinance
-smtplib-ssl
