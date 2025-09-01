@@ -1,0 +1,22 @@
+name: Morning SEC Digest
+on:
+  schedule:
+    - cron: "30 12 * * 1-5"   # 12:30 UTC = 08:30 ET
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with: { python-version: "3.11" }
+      - run: pip install -r requirements.txt
+      - run: python main.py
+        env:
+          SEC_API_KEY: ${{ secrets.SEC_API_KEY }}
+          EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
+          EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_TO:   ${{ secrets.EMAIL_TO }}
