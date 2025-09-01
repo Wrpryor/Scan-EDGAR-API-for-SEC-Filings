@@ -1,22 +1,21 @@
-name: Morning SEC Digest
+name: EDGAR Morning Scan
 on:
   schedule:
-    - cron: "30 12 * * 1-5"   # 12:30 UTC = 08:30 ET
+    # 09:30 UTC ≈ 05:30 EDT (before market open)
+    - cron: "30 9 * * 1-5"
   workflow_dispatch:
 
 jobs:
-  build:
+  scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: pip install -r requirements.txt
-      - run: python main.py
+      - run: python edgar_scan.py
         env:
           SEC_API_KEY: ${{ secrets.SEC_API_KEY }}
-          EMAIL_HOST: ${{ secrets.EMAIL_HOST }}
-          EMAIL_PORT: ${{ secrets.EMAIL_PORT }}
-          EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          EMAIL_TO:   ${{ secrets.EMAIL_TO }}
+          SMTP_USER:   ${{ secrets.SMTP_USER }}
+          SMTP_PASS:   ${{ secrets.SMTP_PASS }}
+          MAIL_TO:     ${{ secrets.MAIL_TO }}
