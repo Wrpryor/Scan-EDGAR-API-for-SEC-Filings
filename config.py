@@ -1,9 +1,10 @@
 import os
-from dotenv import load_dotenv; load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
 
-SEC_API_KEY = os.getenv("SEC_API_KEY")
-EMAIL_HOST  = os.getenv("EMAIL_HOST")   # e.g. smtp.gmail.com
-EMAIL_PORT  = int(os.getenv("EMAIL_PORT", 587))
-EMAIL_USER  = os.getenv("EMAIL_USER")
-EMAIL_PASS  = os.getenv("EMAIL_PASS")
-EMAIL_TO    = os.getenv("EMAIL_TO")
+SEC_API_KEY      = os.getenv("SEC_API_KEY")
+SMTP_SERVER      = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT        = int(os.getenv("SMTP_PORT", "465"))
+SMTP_USER        = os.getenv("SMTP_USER")
+SMTP_PASS        = os.getenv("SMTP_PASS")
+MAIL_TO          = os.getenv("MAIL_TO")
