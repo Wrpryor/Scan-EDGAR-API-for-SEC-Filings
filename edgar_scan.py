@@ -31,28 +31,28 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; EDGAR-Scan/1.0)"}
 # Helper – fetch filing text via SEC-API’s documentUrl
 # ------------------------------------------------------------------
 def _get_filing_text(url: str) -> str:
+    """Return the first 2 KB of clean text from SEC-API documentUrl."""
     if not url:
         return ""
     try:
         r = requests.get(url, headers=HEADERS, timeout=15)
         r.raise_for_status()
-        # Strip tags and collapse whitespace
         text = re.sub(r"<[^>]+>", " ", r.text)
-        return " ".join(text.split())[:1500]
-    except Exception as e:
-        print("DEBUG _get_filing_text error:", e)
+        return " ".join(text.split())[:2000]
+    except Exception:
         return ""
 
 # ------------------------------------------------------------------
 # Helper – two-sentence summary via Moonshot
 # ------------------------------------------------------------------
 def _summarize(text: str) -> str:
+    """Two-sentence plain-English summary via Moonshot."""
     if not text:
         return "Unable to retrieve filing text."
 
     prompt = (
-        "Summarize the following SEC filing in two plain-English sentences, "
-        "highlighting what changed and why it matters to investors:\n\n" + text
+        "Summarize the following SEC filing in two plain-English sentences. "
+        "Highlight the key event and why it matters to investors:\n\n" + text
     )
     try:
         client = openai.OpenAI(
@@ -66,8 +66,8 @@ def _summarize(text: str) -> str:
             temperature=0.3,
         )
         return resp.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Summary unavailable ({e})."
+    except Exception:
+        return "Summary unavailable."
 
 # ------------------------------------------------------------------
 # Helpers – SMTP + ticker extraction
@@ -139,10 +139,8 @@ def build_summary() -> str:
                 "or directional equity/option plays if thesis is clear"
             )
 
-            # SEC-API gives the raw document URL in "documentUrl"
-            filing_summary = _summarize(
-                _get_filing_text(doc.get("documentUrl", ""))
-            )
+            # SEC-API gives the raw document link in "documentUrl"
+            filing_summary = _summarize(_get_filing_text(doc.get("documentUrl", "")))
 
             bullets.append(
                 f"• {headline[:120]}…\n"
