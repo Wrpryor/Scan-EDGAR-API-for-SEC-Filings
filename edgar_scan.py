@@ -117,7 +117,8 @@ def build_summary() -> str:
             "query": f"{query_str} AND filedAt:[{YESTERDAY}T00:00:00 TO {YESTERDAY}T23:59:59]",
             "from": "0",
             "size": "50",
-            "sort": [{"filedAt": {"order": "desc"}}]
+            "sort": [{"filedAt": {"order": "desc"}}],
+            "includeFields": ["companyName", "ticker", "formType", "filedAt", "documentUrl", "description", "items"]
         }
         hits = api.get_filings(q)
 
