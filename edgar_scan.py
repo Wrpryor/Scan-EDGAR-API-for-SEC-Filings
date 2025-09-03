@@ -54,7 +54,7 @@ def _get_filing_text(accession_no: str, cik: str, ticker: str = "") -> str:
     try:
         idx_resp = requests.get(url, headers=headers, timeout=10)
         idx_resp.raise_for_status()
-        links = re.findall(r'href="(/Archives/edgar/data/.*?\.htm)"', idx_resp.text)
+       links = re.findall(r'href\s*=\s*["\'](/Archives/edgar/data/.*?\.htm)["\']', idx_resp.text, flags=re.I)
         if not links:
             print("DEBUG: no .htm link found on index page")
             return ""
