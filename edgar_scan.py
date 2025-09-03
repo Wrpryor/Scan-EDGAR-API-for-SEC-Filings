@@ -17,7 +17,9 @@ import openai                   # pip install openai>=1.0
 
 from config import *             # SEC_API_KEY, MOONSHOT_API_KEY, SMTP_*, MAIL_TO
 
-YESTERDAY = (dt.datetime.utcnow() - dt.timedelta(days=1)).strftime("%Y-%m-%d")
+import pytz
+EST = pytz.timezone("US/Eastern")
+YESTERDAY = (dt.datetime.now(EST) - dt.timedelta(days=1)).strftime("%Y-%m-%d")
 
 FORMS = {
     "8-K":      'formType:"8-K"',
