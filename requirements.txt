@@ -4,3 +4,4 @@ pandas
 python-dateutil
 yfinance
 openai>=1.0
+pytz
