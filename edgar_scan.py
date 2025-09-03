@@ -27,14 +27,12 @@ FORMS = {
 }
 
 # ------------------------------------------------------------
-# Helpers for company name + filing summary  (Moonshot)
+# Helpers for company name + filing summary  (Moonshot version)
 # ------------------------------------------------------------
 def _get_filing_text(accession_no: str, cik: str) -> str:
     """
     Returns the first ~30 KB of clean text from the actual filing.
     """
-    if not accession_no or not cik:
-        return ""
     cik_stripped = cik.lstrip("0")
     url = (
         f"https://www.sec.gov/Archives/edgar/data/{cik_stripped}/"
@@ -73,11 +71,11 @@ def _summarize(text: str) -> str:
             temperature=0.3,
         )
         return resp.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Summary unavailable ({e})."
+    except Exception:
+        return "Summary unavailable."
 
 # ------------------------------------------------------------
-# unchanged helper functions
+# Everything below is unchanged except build_summary()
 # ------------------------------------------------------------
 def email_report(body: str):
     """Send plain-text e-mail using SMTP_SSL."""
@@ -90,6 +88,7 @@ def email_report(body: str):
         server.sendmail(SMTP_USER, MAIL_TO.split(","), msg.as_string())
 
 def get_tickers_from_filing(filing: dict) -> list:
+    """Return list of tickers referenced in the filing."""
     tickers = []
     for f in filing.get("filers", []):
         if "ticker" in f:
@@ -99,6 +98,11 @@ def get_tickers_from_filing(filing: dict) -> list:
     return list(set(tickers))
 
 def quick_sentiment(ticker: str) -> str:
+    """
+    Naïve 1-3 month sentiment guess based on
+    1) 30-day implied volatility percentile vs 1-year
+    2) Insider/activist filing types
+    """
     try:
         tk = yf.Ticker(ticker)
         hist = tk.history(period="1y")
@@ -114,9 +118,6 @@ def quick_sentiment(ticker: str) -> str:
     except Exception:
         return "Direction unclear"
 
-# ------------------------------------------------------------
-# build_summary with safe extraction + debug prints
-# ------------------------------------------------------------
 def build_summary() -> str:
     api = QueryApi(api_key=SEC_API_KEY)
     bullets = []
@@ -129,31 +130,11 @@ def build_summary() -> str:
         }
         hits = api.get_filings(q)
         for doc in hits.get("filings", []):
-            # ------------- DEBUG -------------
-            print("DEBUG: companyName=", doc.get("companyName"),
-                  "cik=", doc.get("cik"),
-                  "accessionNo=", doc.get("accessionNo"),
-                  "issuers=", doc.get("issuers"))
-            # ---------------------------------
-
-            # safest extraction order
-            cik = (
-                doc.get("cik") or
-                (doc.get("filers") or [{}])[0].get("cik", "")
-            )
-            accession_no = (
-                doc.get("accessionNo") or
-                (doc.get("filers") or [{}])[0].get("accessionNo", "")
-            )
-
-            company_name = (
-                doc.get("companyName") or
-                (doc.get("issuers") or [{}])[0].get("name") or
-                (doc.get("filers") or [{}])[0].get("name") or
-                "n/a"
-            )
-
             tickers = get_tickers_from_filing(doc)
+            company_name = (
+                doc.get("issuers", [{}])[0].get("name") or
+                doc.get("companyName", "n/a")
+            )
             headline = doc.get("description") or doc.get("items", [""])[0] or "No headline"
             ticker_str = ", ".join(tickers) if tickers else "n/a"
             direction = quick_sentiment(tickers[0]) if tickers else "n/a"
@@ -162,7 +143,7 @@ def build_summary() -> str:
                 "or directional equity/option plays if thesis is clear"
             )
 
-            filing_summary = _summarize(_get_filing_text(accession_no, cik))
+            filing_summary = _summarize(_get_filing_text(doc["accessionNo"], doc["cik"]))
 
             bullets.append(
                 f"• {headline[:120]}…\n"
