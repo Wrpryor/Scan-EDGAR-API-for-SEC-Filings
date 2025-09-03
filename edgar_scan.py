@@ -30,15 +30,16 @@ FORMS = {
 # Helpers for company name + filing summary  (Moonshot)
 # ------------------------------------------------------------
 def _get_filing_text(accession_no: str, cik: str, ticker: str = "") -> str:
-    if not cik or not accession_no:
-        if ticker:
-            try:
-                tk = yf.Ticker(ticker)
-                cik = str(tk.get_info().get("cik")).zfill(10)
-            except Exception:
-                return ""
-        if not cik or not accession_no:
-            return ""
+    """Pull the actual 8-K HTML straight from SEC-API's link."""
+    url = f"https://www.sec.gov/Archives/edgar/data/{cik.lstrip('0')}/{accession_no.replace('-', '')}/{accession_no}.txt"
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; EDGAR-Scan/1.0)"}
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        r.raise_for_status()
+        text = re.sub(r"<[^>]+>", " ", r.text)
+        return " ".join(text.split())[:1500]
+    except Exception:
+        return ""
 
     cik_stripped = cik.lstrip("0")
     acc_clean = accession_no.replace("-", "")
