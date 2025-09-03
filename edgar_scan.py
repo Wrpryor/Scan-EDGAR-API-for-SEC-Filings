@@ -30,44 +30,36 @@ FORMS = {
 # Helpers for company name + filing summary  (Moonshot)
 # ------------------------------------------------------------
 def _get_filing_text(accession_no: str, cik: str, ticker: str = "") -> str:
-    """
-    Returns the first ~30 KB of clean text from the actual filing.
-    Falls back to ticker→CIK lookup if CIK missing.
-    """
     if not cik or not accession_no:
         if ticker:
             try:
                 tk = yf.Ticker(ticker)
                 cik = str(tk.get_info().get("cik")).zfill(10)
-            except Exception as e:
-                print("DEBUG ticker→CIK failed:", e)
+            except Exception:
                 return ""
         if not cik or not accession_no:
-            print("DEBUG: missing cik or accession_no")
             return ""
 
     cik_stripped = cik.lstrip("0")
     acc_clean = accession_no.replace("-", "")
     url = f"https://www.sec.gov/Archives/edgar/data/{cik_stripped}/{acc_clean}/{accession_no}-index.htm"
-    print("DEBUG built URL:", url)
     headers = {"User-Agent": "Mozilla/5.0 (compatible; EDGAR-Scan/1.0)"}
     try:
         idx_resp = requests.get(url, headers=headers, timeout=10)
         idx_resp.raise_for_status()
-       links = re.findall(r'href\s*=\s*["\'](/Archives/edgar/data/.*?\.htm)["\']', idx_resp.text, flags=re.I)
+        links = re.findall(
+            r'href\s*=\s*["\'](/Archives/edgar/data/.*?\.htm)["\']',
+            idx_resp.text,
+            flags=re.I
+        )
         if not links:
-            print("DEBUG: no .htm link found on index page")
             return ""
         doc_url = f"https://www.sec.gov{links[0]}"
-        print("DEBUG doc URL:", doc_url)
         doc_resp = requests.get(doc_url, headers=headers, timeout=10)
         doc_resp.raise_for_status()
         text = re.sub(r"<[^>]+>", " ", doc_resp.text)
-        cleaned = " ".join(text.split())[:1500]
-        print("DEBUG cleaned text len:", len(cleaned))
-        return cleaned
-    except Exception as e:
-        print("DEBUG filing-text error:", e)
+        return " ".join(text.split())[:1500]
+    except Exception:
         return ""
 
 def _summarize(text: str) -> str:
