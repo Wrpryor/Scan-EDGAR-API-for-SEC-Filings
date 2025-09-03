@@ -50,8 +50,9 @@ def _get_filing_text(accession_no: str, cik: str, ticker: str = "") -> str:
     acc_clean = accession_no.replace("-", "")
     url = f"https://www.sec.gov/Archives/edgar/data/{cik_stripped}/{acc_clean}/{accession_no}-index.htm"
     print("DEBUG built URL:", url)
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; EDGAR-Scan/1.0)"}
     try:
-        idx_resp = requests.get(url, headers={"User-Agent": "EDGAR-Scan script"}, timeout=10)
+        idx_resp = requests.get(url, headers=headers, timeout=10)
         idx_resp.raise_for_status()
         links = re.findall(r'href="(/Archives/edgar/data/.*?\.htm)"', idx_resp.text)
         if not links:
@@ -59,7 +60,7 @@ def _get_filing_text(accession_no: str, cik: str, ticker: str = "") -> str:
             return ""
         doc_url = f"https://www.sec.gov{links[0]}"
         print("DEBUG doc URL:", doc_url)
-        doc_resp = requests.get(doc_url, headers={"User-Agent": "EDGAR-Scan script"}, timeout=10)
+        doc_resp = requests.get(doc_url, headers=headers, timeout=10)
         doc_resp.raise_for_status()
         text = re.sub(r"<[^>]+>", " ", doc_resp.text)
         cleaned = " ".join(text.split())[:1500]
