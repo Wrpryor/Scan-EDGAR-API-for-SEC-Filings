@@ -27,27 +27,46 @@ FORMS = {
 }
 
 # ------------------------------------------------------------
-# Helpers for company name + filing summary  (Moonshot version)
+# Helpers for company name + filing summary  (Moonshot)
 # ------------------------------------------------------------
-def _get_filing_text(accession_no: str, cik: str) -> str:
+def _get_filing_text(accession_no: str, cik: str, ticker: str = "") -> str:
     """
     Returns the first ~30 KB of clean text from the actual filing.
+    Falls back to ticker→CIK lookup if CIK missing.
     """
+    if not cik or not accession_no:
+        if ticker:
+            try:
+                tk = yf.Ticker(ticker)
+                cik = str(tk.get_info().get("cik")).zfill(10)
+            except Exception as e:
+                print("DEBUG ticker→CIK failed:", e)
+                return ""
+        if not cik or not accession_no:
+            print("DEBUG: missing cik or accession_no")
+            return ""
+
     cik_stripped = cik.lstrip("0")
-    url = (
-        f"https://www.sec.gov/Archives/edgar/data/{cik_stripped}/"
-        f"{accession_no.replace('-', '')}/{accession_no}-index.htm"
-    )
+    acc_clean = accession_no.replace("-", "")
+    url = f"https://www.sec.gov/Archives/edgar/data/{cik_stripped}/{acc_clean}/{accession_no}-index.htm"
+    print("DEBUG built URL:", url)
     try:
-        idx_resp = requests.get(url, headers={"User-Agent": "EDGAR-Scan script"})
+        idx_resp = requests.get(url, headers={"User-Agent": "EDGAR-Scan script"}, timeout=10)
         idx_resp.raise_for_status()
-        doc_path = re.findall(r'href="(/Archives/edgar/data/.*?\.htm)"', idx_resp.text)[0]
-        doc_url = f"https://www.sec.gov{doc_path}"
+        links = re.findall(r'href="(/Archives/edgar/data/.*?\.htm)"', idx_resp.text)
+        if not links:
+            print("DEBUG: no .htm link found on index page")
+            return ""
+        doc_url = f"https://www.sec.gov{links[0]}"
+        print("DEBUG doc URL:", doc_url)
         doc_resp = requests.get(doc_url, headers={"User-Agent": "EDGAR-Scan script"}, timeout=10)
         doc_resp.raise_for_status()
         text = re.sub(r"<[^>]+>", " ", doc_resp.text)
-        return " ".join(text.split())[:1000]
-    except Exception:
+        cleaned = " ".join(text.split())[:1500]
+        print("DEBUG cleaned text len:", len(cleaned))
+        return cleaned
+    except Exception as e:
+        print("DEBUG filing-text error:", e)
         return ""
 
 def _summarize(text: str) -> str:
@@ -71,11 +90,11 @@ def _summarize(text: str) -> str:
             temperature=0.3,
         )
         return resp.choices[0].message.content.strip()
-    except Exception:
-        return "Summary unavailable."
+    except Exception as e:
+        return f"Summary unavailable ({e})."
 
 # ------------------------------------------------------------
-# Everything below is unchanged except build_summary()
+# unchanged helper functions
 # ------------------------------------------------------------
 def email_report(body: str):
     """Send plain-text e-mail using SMTP_SSL."""
@@ -88,7 +107,6 @@ def email_report(body: str):
         server.sendmail(SMTP_USER, MAIL_TO.split(","), msg.as_string())
 
 def get_tickers_from_filing(filing: dict) -> list:
-    """Return list of tickers referenced in the filing."""
     tickers = []
     for f in filing.get("filers", []):
         if "ticker" in f:
@@ -98,11 +116,6 @@ def get_tickers_from_filing(filing: dict) -> list:
     return list(set(tickers))
 
 def quick_sentiment(ticker: str) -> str:
-    """
-    Naïve 1-3 month sentiment guess based on
-    1) 30-day implied volatility percentile vs 1-year
-    2) Insider/activist filing types
-    """
     try:
         tk = yf.Ticker(ticker)
         hist = tk.history(period="1y")
@@ -118,6 +131,9 @@ def quick_sentiment(ticker: str) -> str:
     except Exception:
         return "Direction unclear"
 
+# ------------------------------------------------------------
+# build_summary with safe extraction + debug prints
+# ------------------------------------------------------------
 def build_summary() -> str:
     api = QueryApi(api_key=SEC_API_KEY)
     bullets = []
@@ -130,11 +146,30 @@ def build_summary() -> str:
         }
         hits = api.get_filings(q)
         for doc in hits.get("filings", []):
-            tickers = get_tickers_from_filing(doc)
-            company_name = (
-                doc.get("issuers", [{}])[0].get("name") or
-                doc.get("companyName", "n/a")
+            # ------------- DEBUG ------
+            print("DEBUG: companyName=", repr(doc.get("companyName")),
+                  "cik=", repr(doc.get("cik")),
+                  "accessionNo=", repr(doc.get("accessionNo")),
+                  "issuers=", repr(doc.get("issuers")))
+            # --------------------------
+
+            cik = (
+                doc.get("cik") or
+                (doc.get("filers") or [{}])[0].get("cik", "")
             )
+            accession_no = (
+                doc.get("accessionNo") or
+                (doc.get("filers") or [{}])[0].get("accessionNo", "")
+            )
+
+            company_name = (
+                doc.get("companyName") or
+                (doc.get("issuers") or [{}])[0].get("name") or
+                (doc.get("filers") or [{}])[0].get("name") or
+                "n/a"
+            )
+
+            tickers = get_tickers_from_filing(doc)
             headline = doc.get("description") or doc.get("items", [""])[0] or "No headline"
             ticker_str = ", ".join(tickers) if tickers else "n/a"
             direction = quick_sentiment(tickers[0]) if tickers else "n/a"
@@ -143,7 +178,9 @@ def build_summary() -> str:
                 "or directional equity/option plays if thesis is clear"
             )
 
-            filing_summary = _summarize(_get_filing_text(doc["accessionNo"], doc["cik"]))
+            filing_summary = _summarize(
+                _get_filing_text(accession_no, cik, tickers[0] if tickers else "")
+            )
 
             bullets.append(
                 f"• {headline[:120]}…\n"
